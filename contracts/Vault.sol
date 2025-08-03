@@ -1,22 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract Vault is ReentrancyGuard {
-    using SafeERC20 for IERC20;
+// Interface for WETH, needed to approve the 1inch router
+interface IWETH {
+    function approve(address spender, uint256 amount) external returns (bool);
+}
 
+contract Vault is ReentrancyGuard {
     struct DcaParams {
         uint256 sliceSize;
         uint256 startTime;
-        uint256 deltaTime; // e.g., 15 minutes in seconds
+        uint256 deltaTime;
     }
 
     address public immutable owner;
-    IERC20 public immutable usdcToken;
     address public immutable predicate;
+    IWETH public immutable wethToken; // For approving the router for WETH
 
     bytes32 public activeOrderHash;
     uint256 public dcaEndTime;
@@ -28,16 +29,16 @@ contract Vault is ReentrancyGuard {
     event DCAStarted(bytes32 orderHash, uint256 endTime);
     event DCACancelled(bytes32 orderHash);
 
-    constructor(address _usdcAddress, address _predicateAddress) {
+    constructor(address _predicateAddress, address _wethAddress) {
         owner = msg.sender;
-        usdcToken = IERC20(_usdcAddress);
         predicate = _predicateAddress;
+        wethToken = IWETH(_wethAddress);
     }
 
-    function deposit(uint256 _amount) external nonReentrant {
+    // This function is now PAYABLE to receive ETH deposits
+    function deposit() external payable nonReentrant {
         require(msg.sender == owner, "Only owner can deposit");
-        usdcToken.safeTransferFrom(msg.sender, address(this), _amount);
-        emit Deposited(msg.sender, _amount);
+        emit Deposited(msg.sender, msg.value);
     }
 
     function startDCA(
@@ -58,20 +59,19 @@ contract Vault is ReentrancyGuard {
             deltaTime: _deltaTime
         });
 
-        // Approve the 1inch router to spend our USDC
-        // The router address is a known, fixed address for each chain
+        // Approve the 1inch router to spend WETH on our behalf
+        // Note: The actual wrapping from ETH to WETH is handled by 1inch's infrastructure
         address inchRouterV6 = 0x111111125421cA6dc452d289314280a0f8842A65;
-        usdcToken.approve(inchRouterV6, type(uint256).max);
+        wethToken.approve(inchRouterV6, type(uint256).max);
 
         emit DCAStarted(_orderHash, dcaEndTime);
     }
 
     function withdraw(uint256 _amount) external nonReentrant {
         require(msg.sender == owner, "Only owner can withdraw");
-        // For the hackathon, we disable withdrawals while a DCA is active
         require(block.timestamp >= dcaEndTime, "DCA is active");
 
-        usdcToken.safeTransfer(msg.sender, _amount);
+        payable(owner).transfer(_amount);
         emit Withdrawn(msg.sender, _amount);
     }
 
