@@ -2,11 +2,11 @@ import { ethers } from "hardhat";
 
 async function main() {
   // --- Parameters for Deployment (Polygon Amoy Testnet) ---
-  const LOP_ADDRESS = "0x111111125421cA6dc452d289314280a0f8842A65"; // 1inch LOP Address (same on many chains)
-  const WBTC_USD_PRICE_FEED = "0x007A22900a3B98143368Bd5906f9E17e58e342Ea"; // Chainlink WBTC/USD on Amoy
-  const USDC_ADDRESS = "0x41e94Eb019C0762f9BFC454586835F283635D926"; // USDC on Amoy
+  const LOP_ADDRESS = "0x111111125421cA6dc452d289314280a0f8842A65";
+  const WBTC_USD_PRICE_FEED = "0x007A22900a3B98143368Bd5906f9E17e58e342Ea";
+  const USDC_ADDRESS = "0x41e94Eb019C0762f9BFC454586835F283635D926";
 
-  // 1. Deploy the Predicate Helper Contract first
+  // 1. Deploy TimeBucketPriceGuard
   const TimeBucketPriceGuard = await ethers.getContractFactory(
     "TimeBucketPriceGuard"
   );
@@ -18,8 +18,10 @@ async function main() {
   const predicateAddress = await timeBucketPriceGuard.getAddress();
   console.log(`TimeBucketPriceGuard deployed to: ${predicateAddress}`);
 
-  // 2. Deploy the main Vault Contract
+  // 2. Deploy Vault
   const Vault = await ethers.getContractFactory("Vault");
+  // Vault constructor no longer needs the predicate address if it's not storing it.
+  // My original Vault contract stored it. Let's keep that. It's useful for the keeper.
   const vault = await Vault.deploy(USDC_ADDRESS, predicateAddress);
   await vault.waitForDeployment();
   const vaultAddress = await vault.getAddress();

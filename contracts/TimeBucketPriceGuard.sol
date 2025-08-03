@@ -41,42 +41,47 @@ interface IVault {
 contract TimeBucketPriceGuard {
     ILimitOrderProtocol public immutable lop;
     IChainlinkAggregator public immutable priceFeed;
-    IVault public immutable vault;
 
-    constructor(
-        address _lopAddress,
-        address _priceFeedAddress,
-        address _vaultAddress
-    ) {
+    constructor(address _lopAddress, address _priceFeedAddress) {
         lop = ILimitOrderProtocol(_lopAddress);
         priceFeed = IChainlinkAggregator(_priceFeedAddress);
-        vault = IVault(_vaultAddress);
     }
 
     function isValidFill(
+        address vaultAddress, // Pass vault address in predicate
         bytes32 orderHash,
         address maker,
-        uint256 makingAmount, // Total size of the order
-        uint256 takingAmount, // Not used for checks, but part of order
-        uint256 fillAmount, // The amount of this specific fill
-        uint256 maxPrice // Max acceptable price (e.g., WBTC in USD with 8 decimals)
+        uint256 makingAmount,
+        uint256 fillAmount,
+        uint256 maxPrice
     ) external view returns (bool) {
-        // --- 1. TIME-BUCKET CHECK ---
+        IVault vault = IVault(vaultAddress);
         IVault.DcaParams memory params = vault.dcaParams(orderHash);
 
+        // ... (rest of the logic is the same)
         uint256 timeElapsed = block.timestamp - params.startTime;
         uint256 currentBucket = timeElapsed / params.deltaTime;
         uint256 spendingAllowance = params.sliceSize * (currentBucket + 1);
 
-        uint256 remaining = lop.remainingInvalidatorForOrder(maker, orderHash);
-        // remaining == 0 means it's a new order
-        uint256 filledSoFar = remaining == 0 ? 0 : makingAmount - (~remaining);
+        uint256 remainingRaw = lop.remainingInvalidatorForOrder(
+            maker,
+            orderHash
+        );
+        uint256 filledSoFar = makingAmount - (~remainingRaw);
+
+        // For a brand new order, remainingRaw is 0, so filledSoFar = makingAmount + 1 which is wrong.
+        // Let's correct the filledSoFar logic.
+        // A partial fill is stored as the inverse of the remaining amount. A new order is 0.
+        if (remainingRaw != 0) {
+            filledSoFar = makingAmount - (~remainingRaw);
+        } else {
+            filledSoFar = 0;
+        }
 
         if (filledSoFar + fillAmount > spendingAllowance) {
             return false;
         }
 
-        // --- 2. PRICE PROTECTION CHECK ---
         (, int256 currentPrice, , , ) = priceFeed.latestRoundData();
         if (uint256(currentPrice) > maxPrice) {
             return false;
