@@ -95,4 +95,8 @@ contract Vault is ReentrancyGuard {
     ) external view returns (DcaParams memory) {
         return _dcaParams[orderHash];
     }
+
+    function currentOrder() external view returns (bytes32) {
+        return activeOrderHash; // already stored when startDCA() fires
+    }
 }
