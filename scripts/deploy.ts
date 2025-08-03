@@ -1,12 +1,10 @@
-// scripts/deploy.ts
 import { ethers } from "hardhat";
 
 async function main() {
-  // --- Parameters for Deployment (Polygon Amoy Testnet) ---
-  const LOP_ADDRESS = "0x111111125421cA6dc452d289314280a0f8842A65";
-  const WBTC_USD_PRICE_FEED = "0x007a22900a3b98143368bd5906f9e17e58e342ea";
-  // --- CORRECTED ADDRESS (ALL LOWERCASE) ---
-  const USDC_ADDRESS = "0x41e94eb019c0762f9bfc454586835f283635d926"; // USDC on Amoy
+  // --- Parameters for Deployment (Base Sepolia Testnet) ---
+  const LOP_ADDRESS = "0x111111125421ca6dc452d289314280a0f8842a65"; // 1inch LOP is the same
+  const BTC_USD_PRICE_FEED = "0xca239103f6e7262105310b2d7088998c36916b27"; // Chainlink BTC/USD on Base Sepolia
+  const USDC_ADDRESS = "0x036cbd53842c5426634e7929541ec2318f3dcf7e"; // Bridged USDC on Base Sepolia
 
   // 1. Deploy the Predicate Helper Contract
   const TimeBucketPriceGuard = await ethers.getContractFactory(
@@ -14,7 +12,7 @@ async function main() {
   );
   const timeBucketPriceGuard = await TimeBucketPriceGuard.deploy(
     LOP_ADDRESS,
-    WBTC_USD_PRICE_FEED
+    BTC_USD_PRICE_FEED
   );
   await timeBucketPriceGuard.waitForDeployment();
   const predicateAddress = await timeBucketPriceGuard.getAddress();
